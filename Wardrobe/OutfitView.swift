@@ -2,12 +2,25 @@ import SwiftUI
 
 struct OutfitView: View {
     @State private var recommendations: [Recommendation] = Recommendation.sample
+    @State private var weather: WeatherService.LiveWeather? = nil
+    @State private var lastUpdated: Date? = nil
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
-                    WeatherCardView(temperature: 22, condition: "多云")
+                    if let w = weather {
+                        WeatherCardView(temperature: Int(w.temperature ?? "0") ?? 0, condition: w.weather ?? "—", lastUpdated: lastUpdated)
+                    } else if weather == nil && lastUpdated == nil {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(.thinMaterial)
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                    } else {
+                        WeatherCardView(temperature: 22, condition: "多云", lastUpdated: lastUpdated)
+                    }
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -33,6 +46,21 @@ struct OutfitView: View {
                 .padding(.top)
             }
             .navigationTitle("搭配")
+            .task {
+                await loadWeather()
+            }
+        }
+    }
+
+    func loadWeather() async {
+        do {
+            let (w, timestamp) = try await WeatherService.shared.getWeather(cityCode: "310115", maxAge: 600)
+            await MainActor.run {
+                self.weather = w
+                self.lastUpdated = timestamp
+            }
+        } catch {
+            // Keep existing weather/lastUpdated if present; no loading state
         }
     }
 }
@@ -85,41 +113,46 @@ struct RecommendationRow: View {
 struct WeatherCardView: View {
     var temperature: Int
     var condition: String
+    var lastUpdated: Date?
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("当前天气")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(temperature)°")
-                        .font(.largeTitle)
-                        .bold()
-                    Text(condition)
-                        .font(.headline)
+        ZStack(alignment: .topTrailing) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("当前天气")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(temperature)°")
+                            .font(.largeTitle)
+                            .bold()
+                        Text(condition)
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
                 }
+
+                Spacer()
             }
 
-            Spacer()
-
-            VStack(alignment: .trailing) {
-                Button(action: {}) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: {}) {
-                    Image(systemName: "map")
-                }
-                .buttonStyle(.bordered)
+            if let date = lastUpdated {
+                Text(formattedMinute(date))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(6)
+                    .offset(x: -6, y: 6)
             }
         }
         .padding()
         .background(.thinMaterial)
         .cornerRadius(12)
         .padding(.horizontal)
+    }
+
+    private func formattedMinute(_ d: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm"
+        return "更新：\(fmt.string(from: d))"
     }
 }
 
