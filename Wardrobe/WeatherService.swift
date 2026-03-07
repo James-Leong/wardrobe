@@ -80,6 +80,7 @@ actor WeatherService {
     }
 
     func fetchLiveWeather(cityCode: String = "310115") async throws -> LiveWeather {
+        // 从 Info.plist 读取 API Key（由 .xcconfig 注入）
         guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "AMAP_API_KEY") as? String,
               !apiKey.isEmpty else {
             throw WeatherError.missingAPIKey

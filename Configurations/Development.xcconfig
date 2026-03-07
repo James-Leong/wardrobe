@@ -1,0 +1,5 @@
+// Development configuration
+#include "Secrets.xcconfig"
+#include "Secrets.local.xcconfig"
+
+// Development-specific settings can go here

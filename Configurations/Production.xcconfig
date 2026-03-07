@@ -1,0 +1,4 @@
+// Production configuration
+#include "Secrets.xcconfig"
+
+// Do NOT include Secrets.local.xcconfig here; production secrets should be injected
