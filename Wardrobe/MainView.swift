@@ -34,8 +34,7 @@ struct MainView: View {
 struct WardrobeView: View {
     var body: some View {
         NavigationView {
-            Text("衣橱 网格视图 - 占位")
-                .navigationTitle("衣橱")
+            WardrobeGridView()
         }
     }
 }

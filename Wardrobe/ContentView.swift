@@ -46,7 +46,7 @@ struct ContentView: View {
 
     private func addItem() {
         withAnimation {
-            let newItem = Item(timestamp: Date())
+            let newItem = Item(imagePath: String(), timestamp: Date())
             modelContext.insert(newItem)
         }
     }
