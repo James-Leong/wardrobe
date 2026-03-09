@@ -95,7 +95,7 @@ struct RecommendationRow: View {
             Spacer()
 
             HStack(spacing: 6) {
-                ForEach(rec.items.prefix(3), id: \ .self) { name in
+                ForEach(rec.items.prefix(3), id: \.self) { name in
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color.gray.opacity(0.2))
                         .frame(width: 48, height: 64)
