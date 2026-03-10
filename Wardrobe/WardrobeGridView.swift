@@ -69,6 +69,7 @@ struct WardrobeGridView: View {
     @State private var selectedFilter = wardrobeAllCategory
     @State private var showCategoryPicker = false
     @State private var editingItem: Item?
+    @State private var viewingItem: Item?
     @State private var gridColumns: [GridItem] = []
 
     private var sortedItems: [Item] {
@@ -149,6 +150,13 @@ struct WardrobeGridView: View {
             editingItem = nil
         }) { item in
             editCategorySheet(for: item)
+        }
+        .fullScreenCover(item: $viewingItem, onDismiss: {
+            viewingItem = nil
+        }) { item in
+            NavigationStack {
+                WardrobeItemDetailView(item: item)
+            }
         }
         .alert("错误", isPresented: $showError) {
             Button("确定") { }
@@ -238,7 +246,9 @@ struct WardrobeGridView: View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVGrid(columns: gridColumns, spacing: 16) {
                 ForEach(filteredItems, id: \.id) { item in
-                    ModernImageCard(item: item)
+                    ModernImageCard(item: item, onTap: {
+                        viewingItem = item
+                    })
                         .aspectRatio(1, contentMode: .fit)
                         .contextMenu {
                             Button {
@@ -667,6 +677,7 @@ struct WardrobeGridView: View {
 
 struct ModernImageCard: View {
     let item: Item
+    let onTap: (() -> Void)?
 
     @State private var image: PlatformImage?
     @State private var isPressed = false
@@ -768,8 +779,12 @@ struct ModernImageCard: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         .animation(.easeInOut(duration: 0.2), value: showDetails)
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showDetails.toggle()
+            if let onTap {
+                onTap()
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showDetails.toggle()
+                }
             }
         }
         .onLongPressGesture(minimumDuration: 0.1) {
@@ -820,6 +835,222 @@ struct ModernImageCard: View {
         formatter.unitsStyle = .abbreviated
         formatter.locale = Locale(identifier: "zh_CN")
         return formatter.localizedString(for: item.timestamp, relativeTo: Date())
+    }
+}
+
+struct WardrobeItemDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let item: Item
+
+    @State private var colorText = ""
+    @State private var season = ""
+    @State private var occasion = ""
+    @State private var warmthLevel = 0
+    @State private var laundryStatus = ""
+    @State private var noteText = ""
+    @State private var saveErrorMessage = ""
+    @State private var showSaveError = false
+    @State private var image: PlatformImage?
+    @State private var isRecognizing = false
+    @State private var aiMessage = ""
+    @State private var showAIMessage = false
+
+    private let seasonOptions = ["", "春", "夏", "秋", "冬", "四季"]
+    private let occasionOptions = ["", "通勤", "日常", "运动", "正式", "旅行", "居家"]
+    private let laundryOptions = ["", "干净可穿", "待清洗", "清洗中"]
+
+    var body: some View {
+        Form {
+            Section("图片") {
+                Group {
+                    if let image {
+                        Image(platformImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color.wardrobeCardBaseLight
+                            ProgressView()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+            }
+
+            Section("基础信息") {
+                LabeledContent("分类", value: item.category)
+
+                HStack {
+                    Text("颜色")
+                    Spacer()
+                    TextField("未设置", text: $colorText)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 180)
+                }
+
+                Picker("季节", selection: $season) {
+                    Text("未设置").tag("")
+                    ForEach(seasonOptions.dropFirst(), id: \.self) { option in
+                        Text(option).tag(option)
+                    }
+                }
+
+                Picker("场景", selection: $occasion) {
+                    Text("未设置").tag("")
+                    ForEach(occasionOptions.dropFirst(), id: \.self) { option in
+                        Text(option).tag(option)
+                    }
+                }
+            }
+
+            Section("状态") {
+                Picker("厚薄等级", selection: $warmthLevel) {
+                    Text("未设置").tag(0)
+                    Text("1 - 很薄").tag(1)
+                    Text("2").tag(2)
+                    Text("3").tag(3)
+                    Text("4").tag(4)
+                    Text("5 - 很厚").tag(5)
+                }
+
+                Picker("洗护状态", selection: $laundryStatus) {
+                    Text("未设置").tag("")
+                    ForEach(laundryOptions.dropFirst(), id: \.self) { option in
+                        Text(option).tag(option)
+                    }
+                }
+            }
+
+            Section("备注") {
+                TextEditor(text: $noteText)
+                    .frame(minHeight: 120)
+            }
+        }
+        .navigationTitle("衣物详情")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .accessibilityLabel("关闭")
+                }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task {
+                        await runAIRecognition()
+                    }
+                } label: {
+                    if isRecognizing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                    }
+                }
+                .disabled(isRecognizing)
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    saveChanges()
+                } label: {
+                    Image(systemName: "checkmark")
+                }
+                .accessibilityLabel("保存")
+                .disabled(isRecognizing)
+            }
+        }
+        .alert("保存失败", isPresented: $showSaveError) {
+            Button("确定") { }
+        } message: {
+            Text(saveErrorMessage)
+        }
+        .alert("AI 识别", isPresented: $showAIMessage) {
+            Button("确定") { }
+        } message: {
+            Text(aiMessage)
+        }
+        .onAppear {
+            colorText = item.color ?? ""
+            season = item.season ?? ""
+            occasion = item.occasion ?? ""
+            warmthLevel = item.warmthLevel ?? 0
+            laundryStatus = item.laundryStatus ?? ""
+            noteText = item.note ?? ""
+
+            image = ImageManager.shared.loadImage(fileName: item.imagePath)
+        }
+    }
+
+    private func saveChanges() {
+        item.color = normalized(colorText)
+        item.season = normalized(season)
+        item.occasion = normalized(occasion)
+        item.warmthLevel = warmthLevel == 0 ? nil : warmthLevel
+        item.laundryStatus = normalized(laundryStatus)
+        item.note = normalized(noteText)
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            saveErrorMessage = error.localizedDescription
+            showSaveError = true
+        }
+    }
+
+    private func runAIRecognition() async {
+        guard let imageData = ImageManager.shared.loadImageData(fileName: item.imagePath) else {
+            aiMessage = "无法读取图片数据，请稍后重试。"
+            showAIMessage = true
+            return
+        }
+
+        isRecognizing = true
+        defer { isRecognizing = false }
+
+        do {
+            let recognized = try await AIImageRecognitionService.shared.recognizeWardrobeInfo(from: imageData)
+            let current = AIImageRecognitionService.RecognitionResult(
+                color: normalized(colorText),
+                season: normalized(season),
+                occasion: normalized(occasion),
+                warmthLevel: warmthLevel == 0 ? nil : warmthLevel,
+                laundryStatus: normalized(laundryStatus),
+                note: normalized(noteText)
+            )
+
+            let merged = AIImageRecognitionService.mergeMissingFields(current: current, recognized: recognized)
+
+            colorText = merged.color ?? ""
+            season = merged.season ?? ""
+            occasion = merged.occasion ?? ""
+            warmthLevel = merged.warmthLevel ?? 0
+            laundryStatus = merged.laundryStatus ?? ""
+            noteText = merged.note ?? ""
+
+            aiMessage = "已识别并自动补全空白字段。"
+            showAIMessage = true
+        } catch {
+            aiMessage = error.localizedDescription
+            showAIMessage = true
+        }
+    }
+
+    private func normalized(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

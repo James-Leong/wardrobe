@@ -59,6 +59,12 @@ class ImageManager {
         return NSImage(data: imageData)
         #endif
     }
+
+    // MARK: - 读取图片原始数据
+    func loadImageData(fileName: String) -> Data? {
+        let filePath = imagesDirectory.appendingPathComponent(fileName)
+        return try? Data(contentsOf: filePath)
+    }
     
     // MARK: - 删除图片
     func deleteImage(fileName: String) throws {
@@ -99,4 +105,3 @@ typealias PlatformImage = UIImage
 #elseif canImport(AppKit)
 typealias PlatformImage = NSImage
 #endif
-

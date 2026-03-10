@@ -4,6 +4,25 @@
 <dict>
 	<key>AMAP_API_KEY</key>
 	<string>$(AMAP_API_KEY)</string>
+	<key>AI_USE_MOCK</key>
+	<string>$(AI_USE_MOCK)</string>
+	<key>AI_VISION_PROVIDER</key>
+	<string>$(AI_VISION_PROVIDER)</string>
+	<key>AI_VISION_API_TOKEN</key>
+	<string>$(AI_VISION_API_TOKEN)</string>
+	<key>AI_VISION_API_URL</key>
+	<string>$(AI_VISION_API_URL)</string>
+	<key>AI_VISION_MODEL</key>
+	<string>$(AI_VISION_MODEL)</string>
+	<key>AI_TEXT_PROVIDER</key>
+	<string>$(AI_TEXT_PROVIDER)</string>
+	<key>AI_TEXT_API_TOKEN</key>
+	<string>$(AI_TEXT_API_TOKEN)</string>
+	<key>AI_TEXT_API_URL</key>
+	<string>$(AI_TEXT_API_URL)</string>
+	<key>AI_TEXT_MODEL</key>
+	<string>$(AI_TEXT_MODEL)</string>
+
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
